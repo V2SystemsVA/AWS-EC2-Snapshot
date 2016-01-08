@@ -3,10 +3,10 @@
 ############################
 ## Copyright 2016, V2 Systems, Inc.
 ## Author: Chris Waskowich
-## Contact: c.waskowich@v2systems.com
+## Contact: c.waskowich@v2systems.com; 703.361.4606x104
 ##
 ## Purpose: Create daily snapshots of EC2 instances with attached Volumes
-## Version: 1.0
+## Version: 1.1
 ##
 ############################
 
@@ -26,13 +26,13 @@ my $retentionDays = 7;
 ############################
 ##
 ## Specify the AWS/IAM Account keys.  This should probably be done through IAM roles instead.
-##
-## V2 Systems, Inc.
+## Also, need the AWS EC2 Region, options are:
+##     us-east-1, us-west-1, us-west-2, us-gov-west-1
 ##
 my $ec2 = Net::Amazon::EC2->new(
         AWSAccessKeyId => '',
         SecretAccessKey => '',
-        region => 'us-east-1' # Options: us-gov-west-1 | us-east-1
+        region => 'us-east-1'
 );
 
 
@@ -76,7 +76,14 @@ sub createSnapshots {
 				push(@{$instancesActive{$instanceId}}, $volumeId);
 			}
 			
-			if( !$gDoActive || ($gDoActive && $instanceState==16) ) {
+			if( ( !$gDoActive && (
+				!$gDoSpecific || 
+				( $gDoSpecific && $gInstanceToSnap{$instanceId} )
+			) ) || 
+			( ( $gDoActive && $instanceState==16 ) && (
+				!$gDoSpecific || 
+				( $gDoSpecific && $gInstanceToSnap{$instanceId} )
+			) ) ) {
 				$snapshotsMade++;
 				
 				my $snap_description =  "DailyBackup--" . $instanceName . "--" . $instanceId . "--" . $volumeId . "--" . $deviceId;
@@ -156,22 +163,32 @@ sub removeSnapshots {
 ## Start Main Code
 ##
 
-my %Options;
+my %options;
 my $today   = today();
 $gDeltaDate = $today - $retentionDays;
 
-getopts('dr:a', \%Options);
+getopts('dr:ai', \%options);
 
 ## Debug Mode
-$gDoDryRun = $Options{'d'};
+$gDoDryRun = $options{'d'};
 
 ## Override retention period
 if($Options{'r'}) {
-	$retentionDays = $Options{'r'};
+	$retentionDays = $options{'r'};
 }
 
 ## Check to see if only running (active) instances are to be snap shotted
-$gDoActive = $Options{'a'};
+$gDoActive = $options{'a'};
+
+## Check to see if we are only doing specific instances
+if($options{'i'}) {
+	$gDoSpecific = 1;
+	foreach (@ARGV) {
+		push(@{$gInstanceToSnap{$_}}, 1);
+		$listInstances .= $_ . " ";
+		$gInstanceToSnapNum++;
+	}
+}
 
 
 if($gDoDryRun) {
@@ -180,6 +197,7 @@ if($gDoDryRun) {
 print "Starting: Daily Snapshot Retention System\n";
 print "System Configuration Summary:\n";
 print "\tOnly active instances: " . ($gDoActive ? 'Yes' : 'No') . "\n";
+print "\tSpecific instances (" . $gInstanceToSnapNum . "): " . $listInstances . "\n";
 print "\tToday is: " . $today . "\n";
 print "\tRetention Period: " . $retentionDays . "\n";
 print "\tRemove snapshots prior to: " . $gDeltaDate . "\n\n";
