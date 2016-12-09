@@ -6,7 +6,7 @@
 ## Contact: c.waskowich@v2systems.com; 703.361.4606x104
 ##
 ## Purpose: Create daily snapshots of EC2 instances with attached Volumes
-## Version: 1.1
+## Version: 1.5
 ##
 ############################
 
@@ -26,14 +26,15 @@ my $retentionDays = 7;
 ############################
 ##
 ## Specify the AWS/IAM Account keys.  This should probably be done through IAM roles instead.
+## These variables can also be specified in the CLI for bulk processing of various account.
 ## Also, need the AWS EC2 Region, options are:
 ##     us-east-1, us-west-1, us-west-2, us-gov-west-1
 ##
-my $ec2 = Net::Amazon::EC2->new(
-        AWSAccessKeyId => '',
-        SecretAccessKey => '',
-        region => 'us-east-1'
-);
+#my $ec2 = Net::Amazon::EC2->new(
+#        AWSAccessKeyId => '',
+#        SecretAccessKey => '',
+#        region => 'us-east-1'
+#);
 
 
 ############################
@@ -91,6 +92,7 @@ sub createSnapshots {
 		
 				if(!$gDoDryRun) {
 					$ec2->create_snapshot(VolumeId=>$volumeId, Description=>$snap_description);
+					sleep 1;
 				}
 			}
 		}
@@ -138,6 +140,7 @@ sub removeSnapshots {
 				print "Removing: Snapshot:" . $snapshot->{snapshot_id} . "; Description: " . $snapshot->{description} . "; Dated: " . $snapshot->{start_time} . "\n";
 				if(!$gDoDryRun) {
 					$ec2->delete_snapshot(SnapshotId=>$snapshot->{snapshot_id});
+					sleep 1;
 				}
 				
 			} else {
@@ -167,14 +170,36 @@ my %options;
 my $today   = today();
 $gDeltaDate = $today - $retentionDays;
 
-getopts('dr:ai', \%options);
+getopts('dr:at:u:p:n:i', \%options);
 
 ## Debug Mode
 $gDoDryRun = $options{'d'};
 
 ## Override retention period
-if($Options{'r'}) {
+if($options{'r'}) {
 	$retentionDays = $options{'r'};
+}
+
+## Get AWS Account info from Command line, only if not already defined
+if( !(defined $ec2) ) {
+	$gAWSAccount  = $options{'t'};
+	$gAWSUsername = $options{'u'};
+	$gAWSSecret   = $options{'p'};
+	$gAWSRegion   = $options{'n'};
+
+	$ec2 = Net::Amazon::EC2->new(
+		AWSAccessKeyId => "$gAWSUsername",
+		SecretAccessKey => "$gAWSSecret",
+		region => "$gAWSRegion"
+	);
+	
+	if($gDoDryRun) {
+		print "\ngAWSAccount   = $gAWSAccount\n";
+		print "gAWSUsername  = $gAWSUsername\n";
+		print "gAWSSecret    = $gAWSSecret\n";
+		print "gAWSRegion    = $gAWSRegion\n\n";
+	}
+
 }
 
 ## Check to see if only running (active) instances are to be snap shotted
@@ -190,10 +215,10 @@ if($options{'i'}) {
 	}
 }
 
-
 if($gDoDryRun) {
 	print "\n\n########## Debug ##########\n\n\n";
 }
+print "Account: $gAWSAccount\n\n";
 print "Starting: Daily Snapshot Retention System\n";
 print "System Configuration Summary:\n";
 print "\tOnly active instances: " . ($gDoActive ? 'Yes' : 'No') . "\n";
