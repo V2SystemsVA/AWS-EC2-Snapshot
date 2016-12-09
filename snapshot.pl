@@ -26,10 +26,10 @@ my $retentionDays = 7;
 ############################
 ##
 ## Specify the AWS/IAM Account keys.  This should probably be done through IAM roles instead.
-## These variables can also be specified in the CLI for bulk processing of various account.
 ## Also, need the AWS EC2 Region, options are:
 ##     us-east-1, us-west-1, us-west-2, us-gov-west-1
 ##
+#$gAWSAccount = 'AWS Account Name';
 #my $ec2 = Net::Amazon::EC2->new(
 #        AWSAccessKeyId => '',
 #        SecretAccessKey => '',
