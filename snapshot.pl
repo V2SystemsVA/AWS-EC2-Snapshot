@@ -6,10 +6,11 @@
 ## Contact: c.waskowich@v2systems.com; 703.361.4606x104
 ##
 ## Purpose: Create daily snapshots of EC2 instances with attached Volumes
-## Version: 1.5
+## Version: 1.6
 ##
 ############################
 
+use lib '/root/perl5/lib/perl5';
 use Date::Simple ('date', 'today');
 use Net::Amazon::EC2;
 use Getopt::Std;
@@ -26,6 +27,7 @@ my $retentionDays = 7;
 ############################
 ##
 ## Specify the AWS/IAM Account keys.  This should probably be done through IAM roles instead.
+## These variables can also be specified in the CLI for bulk processing of various account.
 ## Also, need the AWS EC2 Region, options are:
 ##     us-east-1, us-west-1, us-west-2, us-gov-west-1
 ##
@@ -91,8 +93,17 @@ sub createSnapshots {
 				print "Creating snapshot of Volume:" . $volumeId . "(" . $deviceId . "); From Instance:" . $instanceId . "(" . $instanceName . ")\n";
 		
 				if(!$gDoDryRun) {
-					$ec2->create_snapshot(VolumeId=>$volumeId, Description=>$snap_description);
+					$snapshotObject = $ec2->create_snapshot(VolumeId=>$volumeId, Description=>$snap_description);
 					sleep 1;
+					
+					if($snapshotTags) {
+						my %tags = split(/\:/, $snapshotTags);
+						my $tagsref = \%tags;
+						
+						$snapshotId = $snapshotObject->snapshot_id;
+						
+						$ec2->create_tags(ResourceId=>$snapshotId, Tags=>$tagsref);
+					}
 				}
 			}
 		}
@@ -170,7 +181,7 @@ my %options;
 my $today   = today();
 $gDeltaDate = $today - $retentionDays;
 
-getopts('dr:at:u:p:n:i', \%options);
+getopts('dr:at:u:p:n:ig:', \%options);
 
 ## Debug Mode
 $gDoDryRun = $options{'d'};
@@ -178,6 +189,11 @@ $gDoDryRun = $options{'d'};
 ## Override retention period
 if($options{'r'}) {
 	$retentionDays = $options{'r'};
+}
+
+## Get AWS Tags to assign to snapshot
+if($options{'g'}) {
+	$snapshotTags = $options{'g'};
 }
 
 ## Get AWS Account info from Command line, only if not already defined
@@ -225,10 +241,12 @@ print "\tOnly active instances: " . ($gDoActive ? 'Yes' : 'No') . "\n";
 print "\tSpecific instances (" . $gInstanceToSnapNum . "): " . $listInstances . "\n";
 print "\tToday is: " . $today . "\n";
 print "\tRetention Period: " . $retentionDays . "\n";
-print "\tRemove snapshots prior to: " . $gDeltaDate . "\n\n";
+print "\tRemove snapshots prior to: " . $gDeltaDate . "\n";
+print "\tAssign Tags: " . $snapshotTags . "\n\n";
 
 &createSnapshots;
 
 print "\n\n";
 
 &removeSnapshots;
+
