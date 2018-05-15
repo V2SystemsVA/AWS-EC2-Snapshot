@@ -6,7 +6,7 @@
 ## Contact: c.waskowich@v2systems.com; 703.361.4606x104
 ##
 ## Purpose: Create daily snapshots of EC2 instances with attached Volumes
-## Version: 1.6
+## Version: 1.6.2
 ##
 ############################
 
@@ -19,16 +19,12 @@ use Data::Dumper;
 
 ############################
 ##
-## Specify the number of days of retention_days
-##
-my $retentionDays = 7;
-
-
-############################
-##
 ## Specify the AWS/IAM Account keys.  This should probably be done through IAM roles instead.
+## If the Instance that this runs from has a IAM role that allows for access to the Keys,
+## then do not manually specify the keys here.
+##
 ## These variables can also be specified in the CLI for bulk processing of various account.
-## Also, need the AWS EC2 Region, options are:
+## Also, need the AWS EC2 Region, options are (there are more):
 ##     us-east-1, us-west-1, us-west-2, us-gov-west-1
 ##
 #$gAWSAccount = 'AWS Account Name';
@@ -178,18 +174,21 @@ sub removeSnapshots {
 ##
 
 my %options;
+my $retentionDays;
 my $today   = today();
-$gDeltaDate = $today - $retentionDays;
 
 getopts('dr:at:u:p:n:ig:', \%options);
 
 ## Debug Mode
 $gDoDryRun = $options{'d'};
 
-## Override retention period
+## Set retention days
 if($options{'r'}) {
 	$retentionDays = $options{'r'};
+} else {
+	$retentionDays = 7;
 }
+$gDeltaDate = $today - $retentionDays;
 
 ## Get AWS Tags to assign to snapshot
 if($options{'g'}) {
