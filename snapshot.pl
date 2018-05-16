@@ -1,12 +1,12 @@
 #!/usr/bin/perl
 
 ############################
-## Copyright 2016, V2 Systems, Inc.
+## Copyright 2018, V2 Systems, Inc.
 ## Author: Chris Waskowich
 ## Contact: c.waskowich@v2systems.com; 703.361.4606x104
 ##
 ## Purpose: Create daily snapshots of EC2 instances with attached Volumes
-## Version: 1.6.2
+## Version: 1.6.5
 ##
 ############################
 
@@ -37,6 +37,82 @@ use Data::Dumper;
 
 ############################
 ##
+## Function: countSnapshots
+## Desc: Count the AWS/EC2 snapshots to be removed
+##
+## First, search for snapshots that we made by this script. Then, look for
+## snapshots older than "retention_days".  If both restrictions are met, then
+## count the snapshot.
+##
+sub countSnapshots {
+	my $snapshots		       = $ec2->describe_snapshots(Owner=>"self");
+	my $snapshotsNum		   = scalar @$snapshots;
+	my $volumes	   	           = $ec2->describe_volumes;
+	my $volumesNum             = scalar @$volumes;
+	my $snapshotsToMake        = 0;
+	my $snapshotsToKeep	       = 0;
+	my $snapshotsFromRetention = 0;
+	my $snapshotStatus         = "";
+	
+	## Count number of volumes to snapshot
+	foreach my $volume (@$volumes) {
+		
+		my $volumeId = $volume->volume_id;
+
+		if( defined($volume->attachments) ) {
+			$instanceId    = $volume->attachments->[0]->{instance_id};
+			$instanceState = $ec2->describe_instances(InstanceId=>$instanceId)->[0]->{instances_set}->[0]->instance_state->code;
+			
+			push(@{$instances{$instanceId}}, $volumeId);
+			if($instanceState==16) {
+				push(@{$instancesActive{$instanceId}}, $volumeId);
+			}
+			
+			if( ( !$gDoActive && (
+				!$gDoSpecific || 
+				( $gDoSpecific && $gInstanceToSnap{$instanceId} )
+			) ) || 
+			( ( $gDoActive && $instanceState==16 ) && (
+				!$gDoSpecific || 
+				( $gDoSpecific && $gInstanceToSnap{$instanceId} )
+			) ) ) {
+				$snapshotsToMake++;
+			}
+		}
+	}
+	
+	## Count number of snapshots remaining, after pruning
+	foreach my $snapshot (@$snapshots) {
+	
+		if( ($snapshot->{description}) && ($snapshot->{description} =~ m/DailyBackup--.*/) ) {
+			my @snapshotDateTime = split(/T/, $snapshot->{start_time});
+			
+			if ( !($snapshotDateTime[0] < $gDeltaDate) ) {
+				$snapshotsToKeep++;
+			}
+		}
+		
+	}
+	
+	$snapshotsFromRetention = $snapshotsToMake * ($gRetentionDays + 1);
+	
+	if($snapshotsToKeep < $snapshotsFromRetention) {
+		$snapshotStatus = "ERROR - Number of snapshots to keep is less than the number of expected snapshots.";
+	} else {
+		$snapshotStatus = "SUCCESS - Number of snapshots to keep is the same or greater than the number of expected snapshots.";
+	}
+	
+	
+	print "Snapshot Count Summary:\n";
+	print "\tExpected Snapshots to Make: " . $snapshotsToMake . "\n";
+	print "\tExpected Snapshot Retention: " . $snapshotsFromRetention . "\n";
+	print "\tFound Snapshot Retention: " . $snapshotsToKeep . "\n";
+	print "\tStatus: " . $snapshotStatus . "\n";
+}
+
+
+############################
+##
 ## Function: createSnapshots
 ## Desc: Create the AWS/EC2 snapshots
 ##
@@ -57,7 +133,7 @@ sub createSnapshots {
 	my $volumes	   	      = $ec2->describe_volumes;
 	my $volumesNum        = scalar @$volumes;
 	
-	print "Starting: Create Snapshots\n";
+	print "\n\nStarting: Create Snapshots\n";
 
 	foreach my $volume (@$volumes) {
 		
@@ -86,7 +162,7 @@ sub createSnapshots {
 				$snapshotsMade++;
 				
 				my $snap_description =  "DailyBackup--" . $instanceName . "--" . $instanceId . "--" . $volumeId . "--" . $deviceId;
-				print "Creating snapshot of Volume:" . $volumeId . "(" . $deviceId . "); From Instance:" . $instanceId . "(" . $instanceName . ")\n";
+				print "\tCreating snapshot of Volume:" . $volumeId . "(" . $deviceId . "); From Instance:" . $instanceId . "(" . $instanceName . ")\n";
 		
 				if(!$gDoDryRun) {
 					$snapshotObject = $ec2->create_snapshot(VolumeId=>$volumeId, Description=>$snap_description);
@@ -134,7 +210,7 @@ sub removeSnapshots {
 	my $snapshotsToKeep	    = 0;
 	my $snapshotsToRemove   = 0;
 	
-	print "Starting: Remove Snapshots\n";
+	print "\n\nStarting: Remove Snapshots\n";
 
 	foreach my $snapshot (@$snapshots) {
 	
@@ -144,7 +220,7 @@ sub removeSnapshots {
 			
 			if ( $snapshotDateTime[0] < $gDeltaDate ) {
 				$snapshotsToRemove++;
-				print "Removing: Snapshot:" . $snapshot->{snapshot_id} . "; Description: " . $snapshot->{description} . "; Dated: " . $snapshot->{start_time} . "\n";
+				print "\tRemoving: Snapshot:" . $snapshot->{snapshot_id} . "; Description: " . $snapshot->{description} . "; Dated: " . $snapshot->{start_time} . "\n";
 				if(!$gDoDryRun) {
 					$ec2->delete_snapshot(SnapshotId=>$snapshot->{snapshot_id});
 					sleep 1;
@@ -152,7 +228,7 @@ sub removeSnapshots {
 				
 			} else {
 				$snapshotsToKeep++;
-				print "Keeping: Snapshot:" . $snapshot->{snapshot_id} . "; Description: " . $snapshot->{description} . "; Dated: " . $snapshot->{start_time} . "\n";
+				print "\tKeeping: Snapshot:" . $snapshot->{snapshot_id} . "; Description: " . $snapshot->{description} . "; Dated: " . $snapshot->{start_time} . "\n";
 			}
 		} else {
 			$snapshotsNotBackup++;
@@ -174,7 +250,6 @@ sub removeSnapshots {
 ##
 
 my %options;
-my $retentionDays;
 my $today   = today();
 
 getopts('dr:at:u:p:n:ig:', \%options);
@@ -184,11 +259,11 @@ $gDoDryRun = $options{'d'};
 
 ## Set retention days
 if($options{'r'}) {
-	$retentionDays = $options{'r'};
+	$gRetentionDays = $options{'r'};
 } else {
-	$retentionDays = 7;
+	$gRetentionDays = 7;
 }
-$gDeltaDate = $today - $retentionDays;
+$gDeltaDate = $today - $gRetentionDays;
 
 ## Get AWS Tags to assign to snapshot
 if($options{'g'}) {
@@ -202,14 +277,28 @@ if( !(defined $ec2) ) {
 	$gAWSSecret   = $options{'p'};
 	$gAWSRegion   = $options{'n'};
 
-	$ec2 = Net::Amazon::EC2->new(
-		AWSAccessKeyId => "$gAWSUsername",
-		SecretAccessKey => "$gAWSSecret",
-		region => "$gAWSRegion"
-	);
+	$ec2 = Net::Amazon::EC2->new();
+	
+	if($gAWSUsername eq '') {
+		$gAWSUsername = $ec2->AWSAccessKeyId;
+	} else {
+		$ec2->AWSAccessKeyId => "$gAWSUsername";
+	}
+	
+	if($gAWSSecret eq '') {
+		$gAWSSecret = $ec2->SecretAccessKey;
+	} else {
+		$ec2->SecretAccessKey => "$gAWSSecret";
+	}
+	
+	if($gAWSRegion eq '') {
+		$gAWSUsername = $ec2->region;
+	} else {
+		$ec2->region => "$gAWSRegion";
+	}
 	
 	if($gDoDryRun) {
-		print "\ngAWSAccount   = $gAWSAccount\n";
+		print "\ngAWSAccount = $gAWSAccount\n";
 		print "gAWSUsername  = $gAWSUsername\n";
 		print "gAWSSecret    = $gAWSSecret\n";
 		print "gAWSRegion    = $gAWSRegion\n\n";
@@ -234,18 +323,18 @@ if($gDoDryRun) {
 	print "\n\n########## Debug ##########\n\n\n";
 }
 print "Account: $gAWSAccount\n\n";
-print "Starting: Daily Snapshot Retention System\n";
 print "System Configuration Summary:\n";
 print "\tOnly active instances: " . ($gDoActive ? 'Yes' : 'No') . "\n";
 print "\tSpecific instances (" . $gInstanceToSnapNum . "): " . $listInstances . "\n";
 print "\tToday is: " . $today . "\n";
-print "\tRetention Period: " . $retentionDays . "\n";
+print "\tRetention Period: " . $gRetentionDays . "\n";
 print "\tRemove snapshots prior to: " . $gDeltaDate . "\n";
 print "\tAssign Tags: " . $snapshotTags . "\n\n";
 
+&countSnapshots;
+
 &createSnapshots;
 
-print "\n\n";
-
 &removeSnapshots;
+
 
