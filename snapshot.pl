@@ -16,6 +16,8 @@ use Net::Amazon::EC2;
 use Getopt::Std;
 use Data::Dumper;
 
+my $gScriptVersion = "1.6.6";
+
 
 
 ############################
@@ -242,6 +244,9 @@ getopts('dr:at:u:p:n:ig:', \%options);
 
 ## Debug Mode
 $gDoDryRun = $options{'d'};
+if($gDoDryRun) {
+	print "########## Debug ##########\n\n\n\n";
+}
 
 ## Set retention days
 if($options{'r'}) {
@@ -281,7 +286,7 @@ if($gAWSUsername eq '' or $gAWSSecret eq '') {
 }
 
 if($gDoDryRun) {
-	print "\ngAWSAccount  = $gAWSAccount\n";
+	print "gAWSAccount  = $gAWSAccount\n";
 	print "gAWSUsername  = " . $ec2->AWSAccessKeyId . "\n";
 	print "gAWSSecret    = " . $ec2->SecretAccessKey . "\n";
 	print "gAWSRegion    = " . $ec2->region . "\n\n";
@@ -300,11 +305,9 @@ if($options{'i'}) {
 	}
 }
 
-if($gDoDryRun) {
-	print "\n\n########## Debug ##########\n\n\n";
-}
 print "Account: $gAWSAccount\n\n";
 print "System Configuration Summary:\n";
+print "\tScript Version: " . $gScriptVersion . "\n";
 print "\tIAM Role: " . ($gDoIAMRole ? 'Yes' : 'No') . "\n";
 print "\tOnly active instances: " . ($gDoActive ? 'Yes' : 'No') . "\n";
 print "\tSpecific instances (" . $gInstanceToSnapNum . "): " . $listInstances . "\n";
