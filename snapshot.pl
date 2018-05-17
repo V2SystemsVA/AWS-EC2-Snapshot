@@ -6,7 +6,7 @@
 ## Contact: c.waskowich@v2systems.com; 703.361.4606x104
 ##
 ## Purpose: Create daily snapshots of EC2 instances with attached Volumes
-## Version: 1.6.5
+## Version: 1.6.6
 ##
 ############################
 
@@ -16,23 +16,6 @@ use Net::Amazon::EC2;
 use Getopt::Std;
 use Data::Dumper;
 
-
-############################
-##
-## Specify the AWS/IAM Account keys.  This should probably be done through IAM roles instead.
-## If the Instance that this runs from has a IAM role that allows for access to the Keys,
-## then do not manually specify the keys here.
-##
-## These variables can also be specified in the CLI for bulk processing of various account.
-## Also, need the AWS EC2 Region, options are (there are more):
-##     us-east-1, us-west-1, us-west-2, us-gov-west-1
-##
-#$gAWSAccount = 'AWS Account Name';
-#my $ec2 = Net::Amazon::EC2->new(
-#        AWSAccessKeyId => '',
-#        SecretAccessKey => '',
-#        region => 'us-east-1'
-#);
 
 
 ############################
@@ -109,6 +92,7 @@ sub countSnapshots {
 	print "\tFound Snapshot Retention: " . $snapshotsToKeep . "\n";
 	print "\tStatus: " . $snapshotStatus . "\n";
 }
+
 
 
 ############################
@@ -193,6 +177,7 @@ sub createSnapshots {
 }
 
 
+
 ############################
 ##
 ## Function: removeSnapshots
@@ -244,6 +229,7 @@ sub removeSnapshots {
 }
 
 
+
 ############################
 ##
 ## Start Main Code
@@ -270,40 +256,35 @@ if($options{'g'}) {
 	$snapshotTags = $options{'g'};
 }
 
-## Get AWS Account info from Command line, only if not already defined
-if( !(defined $ec2) ) {
-	$gAWSAccount  = $options{'t'};
-	$gAWSUsername = $options{'u'};
-	$gAWSSecret   = $options{'p'};
-	$gAWSRegion   = $options{'n'};
+## Get AWS Account info from Command line, if not enough information is provided, try 
+## through the IAM role.
 
-	$ec2 = Net::Amazon::EC2->new();
-	
-	if($gAWSUsername eq '') {
-		$gAWSUsername = $ec2->AWSAccessKeyId;
-	} else {
-		$ec2->AWSAccessKeyId => "$gAWSUsername";
-	}
-	
-	if($gAWSSecret eq '') {
-		$gAWSSecret = $ec2->SecretAccessKey;
-	} else {
-		$ec2->SecretAccessKey => "$gAWSSecret";
-	}
-	
-	if($gAWSRegion eq '') {
-		$gAWSUsername = $ec2->region;
-	} else {
-		$ec2->region => "$gAWSRegion";
-	}
-	
-	if($gDoDryRun) {
-		print "\ngAWSAccount = $gAWSAccount\n";
-		print "gAWSUsername  = $gAWSUsername\n";
-		print "gAWSSecret    = $gAWSSecret\n";
-		print "gAWSRegion    = $gAWSRegion\n\n";
-	}
+$gAWSAccount  = $options{'t'};
+$gAWSUsername = $options{'u'};
+$gAWSSecret   = $options{'p'};
+$gAWSRegion   = $options{'n'};
 
+if($gAWSUsername eq '' or $gAWSSecret eq '') {
+	$gDoIAMRole = 1;
+	$ec2 = Net::Amazon::EC2->new(
+		region => $gAWSRegion
+	);
+	
+} else {
+	$gDoIAMRole = 0;
+	$ec2 = Net::Amazon::EC2->new(
+		AWSAccessKeyId => $gAWSUsername,
+		SecretAccessKey => $gAWSSecret,
+		region => $gAWSRegion
+	);
+	
+}
+
+if($gDoDryRun) {
+	print "\ngAWSAccount  = $gAWSAccount\n";
+	print "gAWSUsername  = " . $ec2->AWSAccessKeyId . "\n";
+	print "gAWSSecret    = " . $ec2->SecretAccessKey . "\n";
+	print "gAWSRegion    = " . $ec2->region . "\n\n";
 }
 
 ## Check to see if only running (active) instances are to be snap shotted
@@ -324,6 +305,7 @@ if($gDoDryRun) {
 }
 print "Account: $gAWSAccount\n\n";
 print "System Configuration Summary:\n";
+print "\tIAM Role: " . ($gDoIAMRole ? 'Yes' : 'No') . "\n";
 print "\tOnly active instances: " . ($gDoActive ? 'Yes' : 'No') . "\n";
 print "\tSpecific instances (" . $gInstanceToSnapNum . "): " . $listInstances . "\n";
 print "\tToday is: " . $today . "\n";
@@ -336,5 +318,3 @@ print "\tAssign Tags: " . $snapshotTags . "\n\n";
 &createSnapshots;
 
 &removeSnapshots;
-
-
