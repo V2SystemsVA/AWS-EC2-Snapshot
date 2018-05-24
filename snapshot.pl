@@ -6,7 +6,7 @@
 ## Contact: c.waskowich@v2systems.com; 703.361.4606x104
 ##
 ## Purpose: Create daily snapshots of EC2 instances with attached Volumes
-## Version: 1.6.6
+## Version: 1.6.7
 ##
 ############################
 
@@ -16,7 +16,7 @@ use Net::Amazon::EC2;
 use Getopt::Std;
 use Data::Dumper;
 
-my $gScriptVersion = "1.6.6";
+my $gScriptVersion = "1.6.7";
 
 
 
@@ -39,7 +39,7 @@ sub countSnapshots {
 	my $snapshotsFromRetention = 0;
 	my $snapshotStatus         = "";
 	
-	## Count number of volumes to snapshot
+	## Count number of volumes to snapshot, i.e., the number of snapshots to make.
 	foreach my $volume (@$volumes) {
 		
 		my $volumeId = $volume->volume_id;
@@ -72,7 +72,7 @@ sub countSnapshots {
 		if( ($snapshot->{description}) && ($snapshot->{description} =~ m/DailyBackup--.*/) ) {
 			my @snapshotDateTime = split(/T/, $snapshot->{start_time});
 			
-			if ( !($snapshotDateTime[0] < $gDeltaDate) ) {
+			if ( $snapshotDateTime[0] >= $gDeltaDate ) {
 				$snapshotsToKeep++;
 			}
 		}
@@ -245,7 +245,7 @@ getopts('dr:at:u:p:n:ig:', \%options);
 ## Debug Mode
 $gDoDryRun = $options{'d'};
 if($gDoDryRun) {
-	print "########## Debug ##########\n\n\n\n";
+	print "\n\n########## Debug ##########\n\n\n\n";
 }
 
 ## Set retention days
@@ -286,7 +286,7 @@ if($gAWSUsername eq '' or $gAWSSecret eq '') {
 }
 
 if($gDoDryRun) {
-	print "gAWSAccount  = $gAWSAccount\n";
+	print "gAWSAccount   = $gAWSAccount\n";
 	print "gAWSUsername  = " . $ec2->AWSAccessKeyId . "\n";
 	print "gAWSSecret    = " . $ec2->SecretAccessKey . "\n";
 	print "gAWSRegion    = " . $ec2->region . "\n\n";
