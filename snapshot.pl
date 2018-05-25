@@ -16,7 +16,7 @@ use Net::Amazon::EC2;
 use Getopt::Std;
 use Data::Dumper;
 
-my $gScriptVersion = "1.6.7";
+my $gScriptVersion = "1.6.8";
 
 
 
@@ -234,7 +234,8 @@ sub removeSnapshots {
 ##
 
 my %options;
-my $today   = today();
+my $today         = today();
+my $scriptRunTime = scalar localtime time();
 
 getopts('dr:at:u:p:n:ig:', \%options);
 
@@ -301,13 +302,13 @@ if($options{'i'}) {
 	}
 }
 
-print "Account: $gAWSAccount\n\n";
 print "System Configuration Summary:\n";
+print "\tAccount: $gAWSAccount\n";
 print "\tScript Version: " . $gScriptVersion . "\n";
 print "\tIAM Role: " . ($gDoIAMRole ? 'Yes' : 'No') . "\n";
 print "\tOnly active instances: " . ($gDoActive ? 'Yes' : 'No') . "\n";
 print "\tSpecific instances (" . $gInstanceToSnapNum . "): " . $listInstances . "\n";
-print "\tToday is: " . $today . "\n";
+print "\tScript Run Time: " . $scriptRunTime . "\n";
 print "\tRetention Period: " . $gRetentionDays . "\n";
 print "\tRemove snapshots prior to: " . $gDeltaDate . "\n";
 print "\tAssign Tags: " . $snapshotTags . "\n\n";
