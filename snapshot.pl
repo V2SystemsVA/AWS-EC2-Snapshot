@@ -6,7 +6,7 @@
 ## Contact: c.waskowich@v2systems.com; 703.361.4606x104
 ##
 ## Purpose: Create daily snapshots of EC2 instances with attached Volumes
-## Version: 1.6.7
+## Version: 1.6.8
 ##
 ############################
 
@@ -66,17 +66,13 @@ sub countSnapshots {
 		}
 	}
 	
-	## Count number of snapshots remaining, after pruning
+	## Count number of "Backup" snapshots. This is prior to making snapshots and prior to 
+	## pruning, so, this isn't perfect.  This basically tells us if we had a problem
+	## yesterday.
 	foreach my $snapshot (@$snapshots) {
-	
 		if( ($snapshot->{description}) && ($snapshot->{description} =~ m/DailyBackup--.*/) ) {
-			my @snapshotDateTime = split(/T/, $snapshot->{start_time});
-			
-			if ( $snapshotDateTime[0] >= $gDeltaDate ) {
-				$snapshotsToKeep++;
-			}
+			$snapshotsToKeep++;
 		}
-		
 	}
 	
 	$snapshotsFromRetention = $snapshotsToMake * ($gRetentionDays + 1);
