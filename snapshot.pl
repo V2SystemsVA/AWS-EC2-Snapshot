@@ -1,12 +1,12 @@
 #!/usr/bin/perl
 
 ############################
-## Copyright 2018, V2 Systems, Inc.
+## Copyright 2019, V2 Systems, Inc.
 ## Author: Chris Waskowich
 ## Contact: c.waskowich@v2systems.com; 703.361.4606x104
 ##
 ## Purpose: Create daily snapshots of EC2 instances with attached Volumes
-## Version: 1.6.8
+## Version: 1.6.9
 ##
 ############################
 
@@ -15,8 +15,9 @@ use Date::Simple ('date', 'today');
 use Net::Amazon::EC2;
 use Getopt::Std;
 use Data::Dumper;
+use Sys::Hostname;
 
-my $gScriptVersion = "1.6.8";
+my $gScriptVersion = "1.6.9";
 
 
 
@@ -303,6 +304,7 @@ if($options{'i'}) {
 }
 
 print "System Configuration Summary:\n";
+print "\tSnapshot Host: " . hostname . "\n";
 print "\tAccount: $gAWSAccount\n";
 print "\tScript Version: " . $gScriptVersion . "\n";
 print "\tIAM Role: " . ($gDoIAMRole ? 'Yes' : 'No') . "\n";
